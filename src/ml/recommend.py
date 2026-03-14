@@ -33,8 +33,8 @@ def _derive_confidence_level(
     provisional_scaling_applied: bool,
 ) -> str:
     provided_count = sum(int(value) for value in feature_availability_summary.values())
-    if provisional_scaling_applied:
-        return "low"
+    if provided_count >= 4:
+        return "high"
     if provided_count >= 3:
         return "medium"
     return "low"

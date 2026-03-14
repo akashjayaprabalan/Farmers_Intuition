@@ -68,6 +68,16 @@ _DEMO_DEFAULTS: dict[str, Any] = {
 }
 
 
+_CONFIG_FIELDS = ("land_area_ha", "variety", "growth_stage", "region")
+
+
+def _config_changed(current: dict[str, Any], previous: dict[str, Any]) -> bool:
+    """Return True if any configuration field changed between updates."""
+    return any(
+        current.get(f) != previous.get(f) for f in _CONFIG_FIELDS
+    )
+
+
 def _check_alerts(
     current: dict[str, Any], previous: dict[str, Any]
 ) -> tuple[bool, list[str]]:
@@ -92,7 +102,9 @@ def _check_alerts(
         alerts.append(
             f"Waterlogging risk \u2014 soil moisture at {current['soil_moisture']}%"
         )
-    if previous and previous.get("predicted_daily_l"):
+    # Only flag irrigation shift when it's caused by actual weather/sensor
+    # changes, not by config changes (land area, variety, growth stage, region).
+    if previous and previous.get("predicted_daily_l") and not _config_changed(current, previous):
         prev_daily = previous["predicted_daily_l"]
         curr_daily = current.get("predicted_daily_l", prev_daily)
         pct_change = abs(curr_daily - prev_daily) / max(prev_daily, 1)
@@ -121,7 +133,7 @@ def _build_recommend_input(env: EnvironmentInput) -> dict[str, Any]:
         "Temperature_Avg_C": env.temperature,
         "Sunlight_Hours": _DEMO_DEFAULTS["sunlight_hours"],
         "Humidity_Percent": env.humidity,
-        "land_area_ha": None,
+        "land_area_ha": env.land_area_ha,
         "crop_type": env.variety,
         "growth_stage": env.growth_stage,
         "rainfall_mm": env.rainfall,
@@ -275,6 +287,7 @@ def post_environment(env: EnvironmentInput) -> EnvironmentResponse:
         "soil_moisture": env.soil_moisture,
         "rainfall": env.rainfall,
         "wind_speed": env.wind_speed,
+        "land_area_ha": env.land_area_ha,
         "growth_stage": env.growth_stage,
         "variety": env.variety,
         "region": env.region,
