@@ -119,19 +119,30 @@ CROP_TYPE_ADJUSTMENTS = {
     "generic_grain": 0.95,
     "generic_vegetable": 1.08,
     "generic_fruit": 1.12,
+    # Vineyard varieties
+    "shiraz": 1.0,
+    "cabernet_sauvignon": 0.95,
+    "pinot_noir": 1.05,
+    "chardonnay": 0.92,
+    "merlot": 0.98,
 }
 GROWTH_STAGE_ADJUSTMENTS = {
     "establishment": 0.95,
     "vegetative": 1.0,
     "flowering": 1.08,
     "maturity": 0.9,
+    # Vineyard growth stages
+    "budburst": 0.7,
+    "veraison": 1.15,
+    "harvest": 0.85,
+    "dormancy": 0.3,
 }
 
 # The model is trained on absolute farm-level liters and does not know land area.
 # This nominal reference area is only used for a provisional scaling fallback.
-PROVISIONAL_REFERENCE_AREA_HA = 1.0
-PROVISIONAL_AREA_SCALE_MIN = 0.25
-PROVISIONAL_AREA_SCALE_MAX = 4.0
+PROVISIONAL_REFERENCE_AREA_HA = 300.0
+PROVISIONAL_AREA_SCALE_MIN = 0.001
+PROVISIONAL_AREA_SCALE_MAX = 100.0
 
 # Placeholder environmental adjustments. These are conservative heuristics used
 # only to make the recommendation wrapper extensible until richer agronomic data

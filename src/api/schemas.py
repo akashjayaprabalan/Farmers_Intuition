@@ -172,6 +172,7 @@ class EnvironmentInput(BaseModel):
     soil_moisture: float = Field(ge=0, le=100)
     rainfall: float = Field(ge=0, le=100)
     wind_speed: float = Field(ge=0, le=150)
+    land_area_ha: Optional[float] = Field(default=5.0, ge=0.5, le=50, description="Land area in hectares for area-based scaling.")
     growth_stage: str = "veraison"
     variety: str = "shiraz"
     region: str = "yarra_valley"
