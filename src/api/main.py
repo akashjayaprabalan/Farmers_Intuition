@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import traceback
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.chat import generate_response
 from src.api.schemas import (
     ChatInput,
     ChatOutput,
@@ -21,10 +21,6 @@ from src.api.schemas import (
     RetrainResponse,
 )
 from src.config import MODEL_ARTIFACT_PATH
-from src.data.validate_schema import SchemaValidationError
-from src.ml.predict import ModelArtifactNotFoundError, load_model_artifact, predict_from_dict
-from src.ml.recommend import recommend_water
-from src.ml.train import train_and_select_model
 
 app = FastAPI(
     title="Farmers Intuition Irrigation API",
@@ -56,8 +52,6 @@ app.add_middleware(
 _environment_state: dict[str, Any] = {}
 _previous_environment_state: dict[str, Any] = {}
 
-# Default parameters used to bridge dashboard inputs to the existing /recommend
-# model which expects full farm observation data.
 _DEMO_DEFAULTS: dict[str, Any] = {
     "country": "Australia",
     "state": "Victoria",
@@ -140,6 +134,51 @@ def get_current_environment() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Debug endpoint — remove after deployment is stable
+# ---------------------------------------------------------------------------
+
+
+@app.get("/debug")
+def debug() -> dict[str, Any]:
+    """Return diagnostic info for debugging Vercel deployment issues."""
+    import sys
+
+    info: dict[str, Any] = {
+        "python_version": sys.version,
+        "model_artifact_path": str(MODEL_ARTIFACT_PATH),
+        "model_artifact_exists": MODEL_ARTIFACT_PATH.exists(),
+        "cwd": str(__import__("pathlib").Path.cwd()),
+        "config_project_root": str(__import__("src.config", fromlist=["PROJECT_ROOT"]).PROJECT_ROOT),
+    }
+    try:
+        from src.data.validate_schema import SchemaValidationError  # noqa: F401
+        info["validate_schema_import"] = "ok"
+    except Exception as exc:
+        info["validate_schema_import"] = str(exc)
+    try:
+        from src.ml.predict import load_model_artifact  # noqa: F401
+        info["predict_import"] = "ok"
+    except Exception as exc:
+        info["predict_import"] = str(exc)
+    try:
+        from src.ml.recommend import recommend_water  # noqa: F401
+        info["recommend_import"] = "ok"
+    except Exception as exc:
+        info["recommend_import"] = str(exc)
+    try:
+        from src.ml.train import train_and_select_model  # noqa: F401
+        info["train_import"] = "ok"
+    except Exception as exc:
+        info["train_import"] = str(exc)
+    try:
+        from src.api.chat import generate_response  # noqa: F401
+        info["chat_import"] = "ok"
+    except Exception as exc:
+        info["chat_import"] = str(exc)
+    return info
+
+
+# ---------------------------------------------------------------------------
 # Original endpoints
 # ---------------------------------------------------------------------------
 
@@ -157,34 +196,43 @@ def health() -> HealthResponse:
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest) -> PredictionResponse:
     try:
+        from src.data.validate_schema import SchemaValidationError
+        from src.ml.predict import ModelArtifactNotFoundError, load_model_artifact, predict_from_dict
+
         artifact = load_model_artifact()
         result = predict_from_dict(request.to_model_input(), artifact=artifact)
         return PredictionResponse(**result)
-    except ModelArtifactNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (SchemaValidationError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
+        if "ModelArtifactNotFoundError" in type(exc).__name__:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
 
 
 @app.post("/recommend", response_model=RecommendationResponse)
 def recommend(request: RecommendationRequest) -> RecommendationResponse:
     try:
+        from src.data.validate_schema import SchemaValidationError
+        from src.ml.predict import ModelArtifactNotFoundError, load_model_artifact
+        from src.ml.recommend import recommend_water
+
         artifact = load_model_artifact()
         result = recommend_water(request.to_model_input(), artifact=artifact)
         return RecommendationResponse(**result)
-    except ModelArtifactNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (SchemaValidationError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
+        if "ModelArtifactNotFoundError" in type(exc).__name__:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail=f"Recommendation failed: {exc}") from exc
 
 
 @app.post("/retrain", response_model=RetrainResponse)
 def retrain(request: RetrainRequest) -> RetrainResponse:
     try:
+        from src.ml.train import train_and_select_model
+
         artifact = train_and_select_model(request.dataset_path)
         return RetrainResponse(
             selected_model=artifact["model_name"],
@@ -192,14 +240,12 @@ def retrain(request: RetrainRequest) -> RetrainResponse:
             dataset_row_count=artifact["dataset_row_count"],
             selected_model_metrics=artifact["selected_model_metrics"],
         )
-    except (FileNotFoundError, SchemaValidationError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Retraining failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
-# Piece 1: Environment state manager
+# Environment state manager
 # ---------------------------------------------------------------------------
 
 
@@ -208,12 +254,15 @@ def post_environment(env: EnvironmentInput) -> EnvironmentResponse:
     global _environment_state, _previous_environment_state
 
     try:
+        from src.ml.predict import ModelArtifactNotFoundError, load_model_artifact
+        from src.ml.recommend import recommend_water
+
         artifact = load_model_artifact()
         recommend_input = _build_recommend_input(env)
         recommendation = recommend_water(recommend_input, artifact=artifact)
-    except ModelArtifactNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
+        if "ModelArtifactNotFoundError" in type(exc).__name__:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         raise HTTPException(
             status_code=500, detail=f"Environment processing failed: {exc}"
         ) from exc
@@ -261,7 +310,7 @@ def get_environment() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Piece 2: Gemini LLM chat endpoint
+# Gemini LLM chat endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -275,7 +324,13 @@ async def chat(data: ChatInput) -> ChatOutput:
             environment={},
         )
 
-    text = await generate_response(data.message, env)
+    try:
+        from src.api.chat import generate_response
+
+        text = await generate_response(data.message, env)
+    except Exception as exc:
+        text = f"Voice assistant unavailable: {exc}"
+
     return ChatOutput(
         response=text,
         is_alert=env.get("should_alert", False),

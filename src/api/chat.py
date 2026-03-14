@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import google.generativeai as genai
-
 from src.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
@@ -45,21 +43,24 @@ RESPONSE RULES:
 - If everything looks fine, just say so: "All looking good. Soil's sitting at 62%, temps are mild. No action needed right now."
 """
 
-_gemini_configured = False
+_genai = None
 
 
-def _ensure_gemini_configured() -> None:
-    global _gemini_configured
-    if not _gemini_configured:
+def _get_genai():
+    global _genai
+    if _genai is None:
+        import google.generativeai as genai
+
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY environment variable is not set")
         genai.configure(api_key=api_key)
-        _gemini_configured = True
+        _genai = genai
+    return _genai
 
 
 async def generate_response(user_message: str | None, env_state: dict[str, Any]) -> str:
-    _ensure_gemini_configured()
+    genai = _get_genai()
 
     if env_state.get("alerts"):
         alert_context = "ACTIVE ALERTS:\n" + "\n".join(f"- {a}" for a in env_state["alerts"])
