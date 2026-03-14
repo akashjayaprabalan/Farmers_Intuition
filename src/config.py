@@ -140,9 +140,9 @@ GROWTH_STAGE_ADJUSTMENTS = {
 
 # The model is trained on absolute farm-level liters and does not know land area.
 # This nominal reference area is only used for a provisional scaling fallback.
-PROVISIONAL_REFERENCE_AREA_HA = 1.0
-PROVISIONAL_AREA_SCALE_MIN = 0.25
-PROVISIONAL_AREA_SCALE_MAX = 4.0
+PROVISIONAL_REFERENCE_AREA_HA = 300.0
+PROVISIONAL_AREA_SCALE_MIN = 0.001
+PROVISIONAL_AREA_SCALE_MAX = 100.0
 
 # Placeholder environmental adjustments. These are conservative heuristics used
 # only to make the recommendation wrapper extensible until richer agronomic data
